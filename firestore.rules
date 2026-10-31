@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owner(uid) {
+      return request.auth != null && request.auth.uid == uid
+        && request.auth.token.email == 'songjhwin@gmail.com'
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    match /users/{uid} {
+      allow get: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['schema','revision','count','bytes','hash','updatedAt'])
+        && request.resource.data.schema == 1
+        && request.resource.data.revision is string
+        && request.resource.data.revision.matches('r_[a-zA-Z0-9_-]+')
+        && request.resource.data.count is int && request.resource.data.count >= 1 && request.resource.data.count <= 140
+        && request.resource.data.bytes is int && request.resource.data.bytes > 0 && request.resource.data.bytes <= 25165824
+        && request.resource.data.hash is string && request.resource.data.hash.matches('[a-f0-9]{64}')
+        && request.resource.data.updatedAt == request.time;
+      match /revisions/{revision}/chunks/{chunk} {
+        allow get: if owner(uid);
+        allow create: if owner(uid) && revision.matches('r_[a-zA-Z0-9_-]+')
+          && chunk.matches('[0-9]{1,3}')
+          && request.resource.data.keys().hasOnly(['payload'])
+          && request.resource.data.payload is string
+          && request.resource.data.payload.size() <= 240000;
+      }
+    }
+    // Unmatched paths, lists, deletes and edits to existing chunks are denied.
+  }
+}
